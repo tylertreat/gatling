@@ -4,7 +4,7 @@ BIN=./bin
 
 gatling:
 	mkdir -p $(BIN)
-	$(CC) -o $(BIN)/gatling \
+	$(CC) -Wall -o $(BIN)/gatling \
 		$(SRC)/gatling.c \
 		$(SRC)/hashmap.c \
 		$(SRC)/subscriptions.c \
