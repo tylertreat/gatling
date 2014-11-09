@@ -1,5 +1,4 @@
 #include <arpa/inet.h>
-#include <errno.h>
 #include <pthread.h>
 #include <resolv.h>
 #include <stdio.h>
@@ -12,10 +11,11 @@
 #include "protocol.h"
 #include "subscriptions.h"
 
-#define GAT_PORT    9999
+#define GAT_PORT 9999
 
 
 chan_t* pub_chan;
+
 
 // Frees the frame resources and zeroes out the pointer.
 void frame_dispose(frame_t* frame)
@@ -34,54 +34,56 @@ void msg_dispose(msg_t* msg)
     msg = NULL;
 }
 
+// Daemon thread which pulls messages from the channel and publishes them to
+// interested subscribers.
 void* publish_loop()
 {
     while (1)
     {
         msg_t* msg;
         chan_recv(pub_chan, (void*) &msg);
-        publish(msg);
+        subscriber_publish(msg);
         msg_dispose(msg);
     }
 
     return NULL;
 }
 
-// Asynchronously publishes a message.
-int msg_publish(msg_t* msg)
+// Asynchronously publishes a message to subscribers. Returns 0 on success, -1
+// on failure.
+int publish(frame_t* frame)
 {
+    msg_t* msg = malloc(sizeof(msg_t));
+    if (!msg)
+    {
+        perror("Failed to allocate message");
+        return -1;
+    }
+
+    if (parse_frame_publish(frame->body, frame->size, msg) == -1)
+    {
+        free(msg);
+        return -1;
+    }
+
     return chan_send(pub_chan, msg);
 }
 
-// Handles a single message frame: subscribe, unsubscribe, or publish. Return 0
-// on success, -1 on failure.
+// Handles a single message frame: subscribe, unsubscribe, or publish. Returns
+// 0 on success, -1 on failure.
 int frame_dispatch(int fd, frame_t* frame)
 {
     switch (frame->proto)
     {
         case GAT_SUB:
             // Subscribe
-            printf("subscribe: %s\n", frame->body);
             return subscribe(frame->body, fd);
         case GAT_USUB:
             // Unsubscribe
-            printf("unsubscribe: %s\n", frame->body);
             return unsubscribe(frame->body, fd);
         case GAT_PUB:
             // Publish
-            printf("publish: %s\n", frame->body);
-            msg_t* msg = malloc(sizeof(msg_t));
-            if (msg == NULL)
-            {
-                perror("Failed to allocate message");
-                return -1;
-            }
-            if (parse_frame_publish(frame->body, frame->size, msg) == -1)
-            {
-                free(msg);
-                return -1;
-            }
-            return msg_publish(msg);
+            return publish(frame);
     }
 
     perror("Invalid frame protocol");
@@ -95,7 +97,7 @@ void* client_loop(void* fd)
     frame_t* frame = malloc(sizeof(frame_t));
     if (frame == NULL)
     {
-        errno = ENOMEM;
+        perror("Failed to allocate frame");
         close(client_fd);
         return NULL;
     }
@@ -107,12 +109,13 @@ void* client_loop(void* fd)
         frame = malloc(sizeof(frame_t));
         if (frame == NULL)
         {
-            errno = ENOMEM;
+            perror("Failed to allocate frame");
             close(client_fd);
             return NULL;
         }
     }
 
+    printf("Client disconnected\n");
     free(frame);
     close(client_fd);
     return NULL;
@@ -129,15 +132,19 @@ void accepter_loop(int sock_fd)
         int addrlen = sizeof(client_addr);
 
         // Accept client connections.
-        client_fd = accept(sock_fd, (struct sockaddr*) &client_addr, (uint *) &addrlen);
-        printf("%s:%d connected\n", inet_ntoa(client_addr.sin_addr), ntohs(client_addr.sin_port));
+        client_fd = accept(sock_fd, (struct sockaddr*) &client_addr,
+            (uint *) &addrlen);
+        printf("%s:%d connected\n", inet_ntoa(client_addr.sin_addr),
+            ntohs(client_addr.sin_port));
 
+        // Start a thread to handle client messages.
         pthread_t th;
         pthread_create(&th, NULL, client_loop, (void *) (intptr_t) client_fd);
     }
 }
 
-int start()
+// Starts the message broker on the given port.
+int start(int port)
 {
     int sock_fd;
     struct sockaddr_in server;
@@ -145,29 +152,31 @@ int start()
     if ((sock_fd = socket(AF_INET, SOCK_STREAM, 0)) < 0)
     {
         perror("Failed to create socket");
-        exit(errno);
+        return -1;
     }
 
     bzero(&server, sizeof(server));
     server.sin_family = AF_INET;
-    server.sin_port = htons(GAT_PORT);
+    server.sin_port = htons(port);
     server.sin_addr.s_addr = INADDR_ANY;
 
     if (bind(sock_fd, (struct sockaddr*) &server, sizeof(server)) != 0)
     {
         perror("Failed to bind socket");
-        exit(errno);
+        return -1;
     }
 
     if (listen(sock_fd, 20) != 0)
     {
         perror("Failed to listen");
-        exit(errno);
+        return -1;
     }
 
     // Start the publisher thread.
     pthread_t th;
     pthread_create(&th, NULL, publish_loop, NULL);
+
+    printf("Broker started on port %d\n", port);
 
     // Start processing messages.
     accepter_loop(sock_fd); 
@@ -176,7 +185,7 @@ int start()
     return 0;
 }
 
-int main()
+int main(int argc, char** argv)
 {
     pub_chan = chan_init(10000); // Probably tweak this...
     if (pub_chan == NULL)
@@ -189,7 +198,13 @@ int main()
         return -1;
     }
 
-    int err = start();
+    int port = GAT_PORT;
+    if (argc > 1)
+    {
+        port = atoi(argv[1]);
+    }
+
+    int err = start(port);
 
     chan_dispose(pub_chan);
     subscriptions_dispose();

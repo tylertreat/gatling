@@ -97,7 +97,7 @@ int unsubscribe(char* topic, int fd)
 
 // Publishes the given message to all peers subscribing to the message topic.
 // Returns -1 on failure, 0 on success.
-int publish(msg_t* msg)
+int subscriber_publish(msg_t* msg)
 {
     map_t* subs;
     pthread_mutex_lock(&mu);
