@@ -25,8 +25,4 @@ void frame_dispose(frame_t* frame);
 // Frees the message resources and zeroes out the pointer.
 void msg_dispose(msg_t* msg);
 
-// Serializes the message into protocol form for sending over the wire. Returns
-// the size of the serialized message.
-size_t msg_buffer(msg_t* msg);
-
 #endif
