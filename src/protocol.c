@@ -145,8 +145,6 @@ char* frame_buffer(const msg_t* msg, size_t* size)
     {
         buf[i + 10 + msg->topic_size] = msg->body[i];
     }
-    {
-    }
 
     return buf;
 }
