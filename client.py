@@ -2,6 +2,9 @@ import socket
 import struct
 
 
+DEFAULT_HOST = 'localhost'
+DEFAULT_PORT = 9999
+
 SUBSCRIBE = 0
 UNSUBSCRIBE = 1
 PUBLISH = 2
@@ -12,8 +15,8 @@ class Client(object):
     def __init__(self):
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
 
-    def connect(self):
-        self.socket.connect(('localhost', 9999))
+    def connect(self, host=DEFAULT_HOST, port=DEFAULT_PORT):
+        self.socket.connect((host, port))
 
     def disconnect(self):
         self.socket.close()
