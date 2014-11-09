@@ -7,7 +7,6 @@
 #include "hashmap.h"
 #include "protocol.h"
 #include "gatling.h"
-#include "list.h"
 
 
 map_t subscriptions;
