@@ -398,7 +398,7 @@ int hashmap_length(map_t in){
 }
 
 /* Get all of the keys in the hashmap. Return the number of keys. */
-extern int hashmap_keys(map_t in, char* keys[])
+int hashmap_keys(map_t in, char* keys[])
 {
     int num_keys = 0;
     if (keys == NULL)
