@@ -9,11 +9,11 @@
 #define GAT_PUB     2
 
 
-// Parses a single message frame. A frame is of the form protocol (2 bytes),
+// Reads a single message frame. A frame is of the form protocol (2 bytes),
 // body size (4 bytes), body (body-size bytes), in network-byte order. If the
 // frame isn't in this form, it's invalid and -1 is returned. Otherwise 0 is
 // returned.
-int parse_frame(int fd, frame_t* frame);
+int read_frame(int fd, frame_t* frame);
 
 // Parses a message-frame body as a publish and populate the provided struct.
 // Publish messages consist of the topic length (4 bytes) followed by the topic

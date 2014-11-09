@@ -102,7 +102,7 @@ void* client_loop(void* fd)
         return NULL;
     }
 
-    while (parse_frame(client_fd, frame) == 0)
+    while (read_frame(client_fd, frame) == 0)
     {
         frame_dispatch(client_fd, frame);
         frame_dispose(frame);
@@ -187,7 +187,7 @@ int start(int port)
 
 int main(int argc, char** argv)
 {
-    pub_chan = chan_init(10000); // Probably tweak this...
+    pub_chan = chan_init(100000); // Probably tweak this...
     if (pub_chan == NULL)
     {
         return -1;

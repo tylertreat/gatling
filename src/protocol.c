@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/ioctl.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
@@ -9,15 +10,37 @@
 #include "protocol.h"
 
 
-// Parses a single message-frame body. This reads the body size (4 bytes)
-// followed by the body itself (n bytes), in network-byte order. If the frame
-// body is not of this form, -1 is returned. Otherwise 0 is returned.
-int parse_frame_body(int fd, frame_t* frame)
+// Reads a single message frame. A frame is of the form protocol (2 bytes),
+// body size (4 bytes), body (body-size bytes), in network-byte order. If the
+// frame isn't in this form, it's invalid and -1 is returned. Otherwise 0 is
+// returned.
+int read_frame(int fd, frame_t* frame)
 {
-    int len = read(fd, &frame->size, 4);
-    if (len != 4)
+    int len = 0;
+    while (len < 2)
     {
-        printf("failed to read frame size\n");
+        ioctl(fd, FIONREAD, &len);
+    }
+
+    int r = read(fd, &frame->proto, 2);
+    if (r != 2)
+    {
+        perror("Failed to read frame protocol");
+        return -1;
+    }
+
+    frame->proto = ntohs(frame->proto);
+
+    len = 0;
+    while (len < 4)
+    {
+        ioctl(fd, FIONREAD, &len);
+    }
+
+    r = read(fd, &frame->size, 4);
+    if (r != 4)
+    {
+        perror("Failed to read frame size");
         return -1;
     }
 
@@ -26,36 +49,24 @@ int parse_frame_body(int fd, frame_t* frame)
     frame->body = malloc(frame->size);
     if (!frame->body)
     {
-        errno = ENOMEM;
+        perror("Failed to allocate frame body");
         return -1;
     }
 
-    len = recv(fd, frame->body, frame->size, 0);
-    if (len != frame->size)
+    len = 0;
+    while (len < frame->size)
     {
-        printf("failed to read frame body\n");
-        free(frame->body);
+        ioctl(fd, FIONREAD, &len);
+    }
+
+    r = read(fd, frame->body, frame->size);
+    if (r != frame->size)
+    {
+        perror("Failed to read frame body");
         return -1;
     }
 
     return 0;
-}
-
-// Parses a single message frame. A frame is of the form protocol (2 bytes),
-// body size (4 bytes), body (body-size bytes), in network-byte order. If the
-// frame isn't in this form, it's invalid and -1 is returned. Otherwise 0 is
-// returned.
-int parse_frame(int fd, frame_t* frame)
-{
-    unsigned short proto;
-    int len = read(fd, &proto, 2);
-    if (len != 2)
-    {
-        return -1;
-    }
-
-    frame->proto = ntohs(proto);
-    return parse_frame_body(fd, frame);
 }
 
 // Parses a message-frame body as a publish and populate the provided struct.
